@@ -4,7 +4,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import com.github.chrisbanes.photoview.PhotoView
-import com.qfxl.pdfview.bitmap.BitmapPool
 
 
 /**
@@ -12,7 +11,7 @@ import com.qfxl.pdfview.bitmap.BitmapPool
  *     author : qfxl
  *     e-mail : xuyonghong0822@gmail.com
  *     time   : 2018/10/27
- *     desc   :
+ *     desc   : pdfView Adapter
  *     version: 1.0
  * </pre>
  */

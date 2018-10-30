@@ -1,13 +1,10 @@
 package com.qfxl.pdfview
 
 import android.content.Context
-import android.graphics.pdf.PdfRenderer
-import android.os.ParcelFileDescriptor
 import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.RecyclerView
 import android.util.AttributeSet
 import android.widget.RelativeLayout
-import com.qfxl.pdfview.bitmap.BitmapPool
 import java.io.File
 import java.io.FileOutputStream
 
@@ -17,11 +14,16 @@ import java.io.FileOutputStream
  *     author : qfxl
  *     e-mail : xuyonghong0822@gmail.com
  *     time   : 2018/10/27
- *     desc   :
+ *     desc   : pdfView,combine with PdfRenderer and RecyclerView.
  *     version: 1.0
  * </pre>
  */
 class PdfView @JvmOverloads constructor(context: Context, attr: AttributeSet? = null, defStyleAttr: Int = 0) : RelativeLayout(context, attr, defStyleAttr) {
+
+    companion object {
+        const val HORIZONTAL = LinearLayoutManager.HORIZONTAL
+        const val VERTICAL = LinearLayoutManager.VERTICAL
+    }
 
     private val pdfRecyclerView = RecyclerView(context)
     /**
@@ -39,10 +41,14 @@ class PdfView @JvmOverloads constructor(context: Context, attr: AttributeSet? = 
     var orientation = LinearLayoutManager.VERTICAL
         set(value) {
             when (value) {
-                LinearLayoutManager.HORIZONTAL -> pdfRecyclerView.layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
-                else -> pdfRecyclerView.layoutManager = LinearLayoutManager(context)
+                HORIZONTAL -> pdfRecyclerView.layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+                VERTICAL -> pdfRecyclerView.layoutManager = LinearLayoutManager(context)
             }
         }
+    /**
+     * pdfLoadTask
+     */
+    private var pdfLoadTask: PdfLoadTask? = null
     /**
      * assetsName
      */
@@ -62,7 +68,9 @@ class PdfView @JvmOverloads constructor(context: Context, attr: AttributeSet? = 
                     asset.close()
                     output.close()
                 }
-                loadPdfFile(destFile)
+                pdfLoadTask = PdfLoadTask(pdfLoadListener).also {
+                    it.execute(destFile)
+                }
             }
         }
     /**
@@ -71,13 +79,35 @@ class PdfView @JvmOverloads constructor(context: Context, attr: AttributeSet? = 
     var pdfFile: File? = null
         set(value) {
             if (value != null) {
-                loadPdfFile(value)
+                pdfLoadTask = PdfLoadTask(pdfLoadListener).also {
+                    it.execute(value)
+                }
             }
         }
 
-    private lateinit var bitmapPool: BitmapPool
+    private var pdfLoadListener: OnPdfLoadListener = object : OnPdfLoadListener {
+        /**
+         * preLoad
+         */
+        override fun onPreLoad() {
 
-    private lateinit var pdfRender: PdfRenderer
+        }
+
+        /**
+         * loading
+         */
+        override fun onLoading(page: Int, pageCount: Int) {
+
+        }
+
+        /**
+         * finish
+         */
+        override fun onFinish(bitmapPool: BitmapPool) {
+            val pdfAdapter = PdfViewAdapter(bitmapPool)
+            pdfRecyclerView.adapter = pdfAdapter
+        }
+    }
 
     init {
         pdfRecyclerView.layoutManager = LinearLayoutManager(context, orientation, false)
@@ -86,25 +116,24 @@ class PdfView @JvmOverloads constructor(context: Context, attr: AttributeSet? = 
         addView(pdfRecyclerView, lp)
     }
 
-    /**
-     * loadFile
-     */
-    private fun loadPdfFile(pdfFile: File) {
-        val fileDescriptor = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
-        pdfRender = PdfRenderer(fileDescriptor)
-        bitmapPool = BitmapPool(pdfRender.pageCount)
+    fun setOnPdfLoadListener(preload: () -> Unit, loading: (page: Int, pageCount: Int) -> Unit, finish: () -> Unit) {
+        pdfLoadListener = object : OnPdfLoadListener {
+            override fun onPreLoad() {
+                preload()
+            }
 
-        for (index in 0 until pdfRender.pageCount) {
-            val page = pdfRender.openPage(index)
-            val bitmap = BitmapPool.createBitmap(page.width, page.height)
-            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            bitmapPool.addBitmap(bitmap)
-            page.close()
+            override fun onLoading(page: Int, pageCount: Int) {
+                loading(page, pageCount)
+            }
+
+            override fun onFinish(bitmapPool: BitmapPool) {
+                finish()
+                val pdfAdapter = PdfViewAdapter(bitmapPool)
+                pdfRecyclerView.adapter = pdfAdapter
+            }
         }
-
-        val pdfAdapter = PdfViewAdapter(bitmapPool)
-        pdfRecyclerView.adapter = pdfAdapter
     }
+
 
     /**
      * listen pdf item select
@@ -123,6 +152,23 @@ class PdfView @JvmOverloads constructor(context: Context, attr: AttributeSet? = 
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        pdfRender.close()
+        pdfLoadTask?.cancel(true)
+    }
+
+    interface OnPdfLoadListener {
+        /**
+         * preLoad
+         */
+        fun onPreLoad()
+
+        /**
+         * loading
+         */
+        fun onLoading(page: Int, pageCount: Int)
+
+        /**
+         * finish
+         */
+        fun onFinish(bitmapPool: BitmapPool)
     }
 }

@@ -1,4 +1,4 @@
-package com.qfxl.pdfview.bitmap
+package com.qfxl.pdfview
 
 import android.graphics.Bitmap
 
